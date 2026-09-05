@@ -1,30 +1,57 @@
-# hyperion-python-template
+# hyperion-proxy-rotator
 
-A template for a single, independently versioned Python package published to
-PyPI with no stored token. Click **Use this template** to make a new repo, then
-work through the rename checklist below.
+Rotate a pool of HTTP proxies across requests, retiring ones that fail onto a
+cooldown so you stop hitting dead or blocked exits.
 
-Batteries included:
+```python
+import requests
+from proxy_rotator import ProxyRotator, RotatingProxyAdapter
 
-- **uv** for the environment, build, and publish
-- **hatchling** build backend, mandatory `src/` layout
-- **Ruff** for linting and formatting
-- **pre-commit** running Ruff (lint and format), the test suite, and file hygiene on every commit
-- **commitizen** enforcing [Conventional Commits](https://www.conventionalcommits.org/) on the `commit-msg` hook
-- **python-semantic-release** for automatic version bump, `CHANGELOG.md`, tag, and GitHub release
-- **PyPI trusted publishing** over OIDC, so no `PYPI_TOKEN` is ever stored
+pool = [
+    "http://user:pass@proxy-a:8000",
+    "http://user:pass@proxy-b:8000",
+    "http://user:pass@proxy-c:8000",
+]
 
-## Rename checklist
+rotator = ProxyRotator(pool, strategy="round_robin", cooldown=60)
 
-Replace the placeholder in these spots, then delete this section:
+session = requests.Session()
+session.mount("https://", RotatingProxyAdapter(rotator))
+session.mount("http://", RotatingProxyAdapter(rotator))
 
-1. `pyproject.toml` — `name` (`my-package`), `description`, `authors`, and the `[project.urls] Repository`.
-2. `pyproject.toml` — `[tool.hatch.build.targets.wheel] packages` (`src/my_package`).
-3. Rename the directory `src/my_package/` to `src/<your_import_name>/` and fix the imports in `__init__.py`, `core.py`, and `tests/`.
-4. `LICENSE` — copyright holder. To use a different license, pick one at [choosealicense.com](https://choosealicense.com/) and update the `license` field in `pyproject.toml` to match.
-5. This `README.md` — rewrite it to lead with a working usage example.
+resp = session.get("https://example.com")  # picks a proxy, retries on failure
+print(resp.status_code)
+```
 
-## Develop
+Each request picks the next proxy. A transport error or a retire-worthy status
+(407, 429, 502, 503, 504 by default) marks that proxy bad and retries on the
+next one; a proxy that keeps working stays in rotation. Bad proxies return after
+`cooldown` seconds.
+
+## Using the rotator on its own
+
+The core has no HTTP dependency of its own, so you can drive any client:
+
+```python
+from proxy_rotator import ProxyRotator
+
+rotator = ProxyRotator(pool, strategy="random", cooldown=60)
+
+proxy = rotator.next()
+try:
+    do_request(proxy)
+    rotator.mark_good(proxy)
+except SomeError:
+    rotator.mark_bad(proxy)
+```
+
+## Install
+
+```
+pip install hyperion-proxy-rotator
+```
+
+## Development
 
 ```
 uv sync
@@ -34,14 +61,9 @@ uv run ruff format .
 uv run pytest -q
 ```
 
-## Releasing
-
-Set up [PyPI trusted publishing](https://docs.pypi.org/trusted-publishers/) once:
-add a trusted publisher on PyPI pointing at this repository and the workflow
-`release.yml`. No token goes in the repo.
-
-After that, every push to `main` is analyzed by python-semantic-release. Commit
-types decide the bump: `fix:` patches, `feat:` adds a minor, a `!` or a
-`BREAKING CHANGE:` footer majors. It writes the version and `CHANGELOG.md`, tags
-`vX.Y.Z`, cuts a GitHub release, and publishes to PyPI. Commits with no
-releasable type publish nothing.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and
+releases are cut by python-semantic-release on push to `main`. Publishing to
+PyPI uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) over
+OIDC (no stored token); configure the trusted publisher on PyPI (GitHub owner
+`hyperion-ai-agency`, repository `hyperion-proxy-rotator`, workflow
+`release.yml`) before the first release.
