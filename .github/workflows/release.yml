@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: release-${{ github.ref }}
+
+jobs:
+  release:
+    # The template repo itself never releases. Derived repos have a different
+    # name, so this guard passes there and the job runs normally.
+    if: github.repository != 'hyperion-ai-agency/hyperion-python-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Semantic release (version, changelog, tag, GitHub release)
+        id: release
+        uses: python-semantic-release/python-semantic-release@v9
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build distributions
+        if: steps.release.outputs.released == 'true'
+        run: uv build
+
+      - name: Publish to PyPI (trusted publishing, OIDC)
+        if: steps.release.outputs.released == 'true'
+        run: uv publish --trusted-publishing always
