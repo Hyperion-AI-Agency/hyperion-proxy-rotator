@@ -51,6 +51,23 @@ except SomeError:
 pip install hyperion-proxy-rotator
 ```
 
+## Or vendor it with Copier
+
+To copy the code straight into a project instead of depending on the published
+package, use [Copier](https://copier.readthedocs.io/):
+
+```
+copier copy gh:hyperion-ai-agency/hyperion-proxy-rotator path/to/project
+```
+
+That drops `src/proxy_rotator/` and `tests/` into the project and records a
+`.copier-answers.yml`. The vendored code still needs `requests`. Pull later
+upstream fixes into the vendored copy from the project root:
+
+```
+copier update
+```
+
 ## Development
 
 ```
