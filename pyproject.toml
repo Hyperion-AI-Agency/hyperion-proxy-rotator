@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hyperion-proxy-rotator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Rotate HTTP proxies for requests, retiring bad ones on a cooldown."
 readme = "README.md"
 requires-python = ">=3.10"
